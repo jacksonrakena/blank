@@ -1,0 +1,10 @@
+Err(rule_missing_valid_target_error
+
+  × rule missing valid target
+   ╭─[/Users/jackson/code/blank/blank_parse/../samples/bad/simple_no_target.kdl:1:1]
+ 1 │ site
+   · ──┬─▲
+   ·   │ ╰── define a URL or other target in this rule
+   ·   ╰── broken rule defined here
+   ╰────
+)

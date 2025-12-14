@@ -1,0 +1,11 @@
+Err(expected_str_error
+
+  × expected a string value here
+   ╭─[/Users/jackson/code/blank/blank_parse/../samples/bad/full_mode_missing.kdl:3:13]
+ 2 │     target "google.com"
+ 3 │     redirect
+   ·             ▲
+   ·             ╰── expected a string here
+ 4 │     description "my site"
+   ╰────
+)

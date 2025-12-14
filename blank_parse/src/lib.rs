@@ -2,7 +2,7 @@ use crate::errors::{ExpectedStringError, InvalidRedirectModeError};
 use crate::rules::{RedirectionMode, RuleOptions};
 use errors::{CannotReadTargetManifestError, InvalidTargetError, RuleMissingValidTargetError};
 use kdl::{KdlDocument, KdlNode, KdlValue, NodeKey};
-use miette::{IntoDiagnostic, NamedSource, SourceOffset};
+use miette::{IntoDiagnostic, NamedSource, SourceOffset, SourceSpan};
 use rules::Rule;
 use std::collections::HashMap;
 use std::fs;
@@ -70,7 +70,7 @@ impl ParseContext {
                         .first()
                         .ok_or_else(|| ExpectedStringError {
                             src: self.source.clone(),
-                            reference: node.span(),
+                            reference: SourceSpan::from(node.span().offset() + node.span().len()),
                         })?
                         .value()
                         .as_string()
@@ -220,6 +220,20 @@ pub fn parse_doc(
 ) -> miette::Result<HashMap<String, Rule>> {
     ParseContext {
         source: source,
+        document: doc,
+    }
+    .try_parse()
+}
+
+pub fn parse_text(
+    filename: &str,
+    text: &str
+) -> miette::Result<HashMap<String, Rule>> {
+    let src = NamedSource::new(filename, text.to_string());
+    let doc: KdlDocument = KdlDocument::parse(&*text)?;
+
+    ParseContext {
+        source: src,
         document: doc,
     }
     .try_parse()

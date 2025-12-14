@@ -1,0 +1,5 @@
+site {
+    target "google.com"
+    redirect
+    description "my site"
+}

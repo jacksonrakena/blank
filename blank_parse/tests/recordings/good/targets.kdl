@@ -1,0 +1,1 @@
+[Rule { name: "github", url: "https://github.com/jacksonrakena", opts: RuleOptions { description: Some("My GitHub profile"), tags: ["code", "projects"], redirect: Permanent } }, Rule { name: "site", url: "https://jacksonrakena.com", opts: RuleOptions { description: Some("My site"), tags: [], redirect: Temporary } }]

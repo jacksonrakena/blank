@@ -1,0 +1,11 @@
+Err(invalid_redirect_mode_error
+
+  × expected one of Permanent, Temporary for redirect mode
+   ╭─[/Users/jackson/code/blank/blank_parse/../samples/bad/full_bad_mode.kdl:3:5]
+ 2 │     target "google.com"
+ 3 │     redirect "bad"
+   ·     ───────┬──────
+   ·            ╰── invalid redirect mode defined here
+ 4 │     description "my site"
+   ╰────
+)

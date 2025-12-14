@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
 members = [
-    "blank_parse",
+    "blank_parse", "blank_parse_cli",
     "web_server"
 ]

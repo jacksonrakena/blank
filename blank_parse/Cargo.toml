@@ -11,6 +11,7 @@ snailquote = "0.3.1"
 
 [dev-dependencies]
 criterion = { version = "0.8.1", features = ["html_reports"] }
+walkdir = "2"
 
 [[bench]]
 name = "parse_benchmark"

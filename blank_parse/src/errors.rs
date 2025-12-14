@@ -63,6 +63,6 @@ pub struct ExpectedStringError {
     pub src: NamedSource<String>,
 
 
-    #[label(primary, "invalid value defined here")]
+    #[label(primary, "expected a string here")]
     pub reference: SourceSpan,
 }
