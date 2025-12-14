@@ -1,0 +1,17 @@
+[package]
+name = "blank_parse"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kdl = "6.5.0"
+miette = { version= "7.6.0", features=["fancy"]}
+thiserror = "2.0.17"
+snailquote = "0.3.1"
+
+[dev-dependencies]
+criterion = { version = "0.8.1", features = ["html_reports"] }
+
+[[bench]]
+name = "parse_benchmark"
+harness = false

@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "blank_parse",
+    "web_server"
+]

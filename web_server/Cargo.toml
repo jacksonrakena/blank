@@ -1,0 +1,11 @@
+[package]
+name = "web_server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+blank_parse = { path = "../blank_parse" }
+axum = "0.8.7"
+tower-http = { version = "0.6.6", features = ["cors", "trace", "add-extension", "sensitive-headers"] }
+tokio = { version = "1.48.0", features = ["full"] }
+miette = "7.6.0"
