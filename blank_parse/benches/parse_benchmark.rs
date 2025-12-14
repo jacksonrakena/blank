@@ -15,7 +15,7 @@ fn create_test_doc_string(size: i32) -> String {
 fn parse_doc(c: &mut Criterion) {
     use kdl::{KdlDocument};
     use miette::NamedSource;
-    use target_parse_lib::parse_doc;
+    use blank_parse::parse_doc;
 
     let mut group = c.benchmark_group("parse_doc");
     for rule_count in [1, 10, 100, 1000, 10_000, 100_000, 1_000_000].iter() {

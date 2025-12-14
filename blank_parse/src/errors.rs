@@ -40,3 +40,17 @@ pub struct InvalidTargetError {
     #[label(primary, "invalid target defined here")]
     pub broken_target_ref: SourceSpan,
 }
+
+#[derive(Error, Debug, Diagnostic)]
+#[error("expected a string value here")]
+#[diagnostic(
+    code("expected_str_error"),
+)]
+pub struct ExpectedStringError {
+    #[source_code]
+    pub src: NamedSource<String>,
+
+
+    #[label(primary, "invalid value defined here")]
+    pub reference: SourceSpan,
+}

@@ -1,0 +1,8 @@
+site "https://jacksonrakena.com" description="My site"
+
+github {
+    target "https://github.com/jacksonrakena"
+    description "My GitHub profile"
+    tags "code" "projects"
+    redirect "permanent"
+}

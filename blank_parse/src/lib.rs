@@ -1,63 +1,108 @@
+use std::collections::HashMap;
 use std::fs;
-use kdl::{KdlDocument, KdlNode};
-use miette::{Diagnostic, NamedSource, SourceOffset};
+use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue, NodeKey};
+use miette::{IntoDiagnostic, NamedSource, SourceOffset};
 use errors::{CannotReadTargetManifestError, InvalidTargetError, RuleMissingValidTargetError};
 use rules::Rule;
+use crate::errors::ExpectedStringError;
+use crate::rules::RuleOptions;
 
 pub mod rules;
 pub mod errors;
 
-fn parse_url_string(url: String, src: &NamedSource<String>, target: &KdlNode) -> Result<String, InvalidTargetError> {
-    snailquote::unescape(&*url).or_else(|e| Err(InvalidTargetError {
-        src: src.clone(),
-        error: e,
-        broken_target_ref: target.span(),
-    }))
+struct ParseContext {
+    source: NamedSource<String>,
+    document: KdlDocument,
 }
-pub fn parse_doc(src: NamedSource<String>, doc: KdlDocument) -> miette::Result<Vec<Rule>> {
-    let mut targets = vec![];
-    for node in doc {
+
+impl ParseContext {
+    fn try_parse(&self) -> miette::Result<HashMap<String, Rule>> {
+        let mut targets = HashMap::new();
+        for node in self.document.nodes() {
+            let rule = self.try_parse_rule(node)?;
+            targets.insert(rule.name.clone(), rule);
+        }
+        Ok(targets)
+    }
+
+    fn parse_string(&self, target: &KdlValue, parent: &KdlNode) -> miette::Result<String> {
+        let str = target
+            .as_string()
+            .ok_or(ExpectedStringError {
+                src: self.source.clone(),
+                reference: parent.span()
+            })
+            .into_diagnostic()?;
+
+        snailquote::unescape(str).or_else(|e| Err(InvalidTargetError {
+            src: self.source.clone(),
+            error: e,
+            broken_target_ref: parent.span(),
+        })).into_diagnostic()
+    }
+
+    fn try_parse_opts(&self, node: &KdlNode) -> miette::Result<RuleOptions> {
+        let mut opts = RuleOptions::default();
+
+        let entries = node.entries();
+
+        if let Some(desc) = entries.iter()
+            .find(|e|e.name().is_some() && e.name().unwrap().to_string().eq("description")) {
+            opts.description = Some(self.parse_string(desc.value(), node)?);
+        }
+
+        Ok(opts)
+    }
+    fn try_parse_rule(&self, node: &KdlNode) -> miette::Result<Rule> {
         match node.children() {
             Some(children) => {
-                let target = children.get("url").ok_or_else(
+                let target = children.get("target").ok_or_else(
                     || RuleMissingValidTargetError {
-                        src: src.clone(),
+                        src: self.source.clone(),
                         broken_target_ref: node.span(),
                         position_to_insert_target: SourceOffset::from(node.span().offset()),
                     }
                 )?;
-                targets.push(Rule {
+                Ok(Rule {
                     name: node.name().to_string(),
-                    url: parse_url_string((&*target.entries().first().ok_or_else(
+                    url: self.parse_string(target.entries().first().ok_or_else(
                         || RuleMissingValidTargetError {
-                            src: src.clone(),
+                            src: self.source.clone(),
                             broken_target_ref: target.span(),
                             position_to_insert_target: SourceOffset::from(target.span().offset()),
                         }
-                    )?.value().to_string()).parse()?, &src, &node)?,
-                });
+                    )?.value(), &node)?,
+                    opts: RuleOptions::default(),
+                })
             },
             None => {
                 let name = node.name();
-
-                let value = node.entries().first().ok_or_else(
-                    || RuleMissingValidTargetError {
-                        src: src.clone(),
+                let entries = node.entries();
+                if entries.len() == 0 {
+                    return Err(RuleMissingValidTargetError {
+                        src: self.source.clone(),
                         broken_target_ref: node.span(),
                         position_to_insert_target: SourceOffset::from(node.span().offset()),
-                    }
-                )?;
-                targets.push(Rule {
+                    })?
+                }
+
+                let target = node.entry(NodeKey::Index(0)).ok_or_else(|| RuleMissingValidTargetError {
+                    src: self.source.clone(),
+                    broken_target_ref: node.span(),
+                    position_to_insert_target: SourceOffset::from(node.span().offset()),
+                })?;
+
+                Ok(Rule {
                     name: name.to_string(),
-                    url: parse_url_string(value.value().to_string(), &src, &node)?,
-                });
+                    url: self.parse_string(target.value(), node)?,
+                    opts: self.try_parse_opts(node)?
+                })
             }
         }
     }
-    Ok(targets)
 }
 
-pub fn parse_targets() -> miette::Result<Vec<Rule>> {
+pub fn parse_targets() -> miette::Result<HashMap<String, Rule>> {
     let target_text = fs::read_to_string("targets.kdl").or_else(|_| Err(CannotReadTargetManifestError {}))?;
     let src = NamedSource::new(
         "targets.kdl".to_string(),
@@ -65,18 +110,23 @@ pub fn parse_targets() -> miette::Result<Vec<Rule>> {
     );
     let doc: KdlDocument = KdlDocument::parse(&*target_text)?;
 
-    parse_doc(src, doc)
+    ParseContext { source: src, document: doc }.try_parse()
+}
+
+pub fn parse_doc(source: NamedSource<String>, doc: KdlDocument) -> miette::Result<HashMap<String, Rule>> {
+    ParseContext { source: source, document: doc }.try_parse()
 }
 
 // tests
 #[cfg(test)]
 mod tests {
+    use miette::Error;
     use super::*;
 
-    fn test_helper_parse_doc(text: &str) -> Vec<Rule> {
+    fn test_helper_parse_doc(text: &str) -> Result<HashMap<String, Rule>, Error> {
         let src = NamedSource::new("test_doc".to_string(), text.to_string());
         let doc: KdlDocument = text.parse().expect("Could not parse KDL document");
-        parse_doc(src, doc).unwrap()
+        parse_doc(src, doc)
     }
 
     #[test]
@@ -85,29 +135,63 @@ mod tests {
         target1 "https://example.com/target1"
         target2 "https://example.com/target2"
         "#;
-        let targets = test_helper_parse_doc(doc_string);
+        let targets = test_helper_parse_doc(doc_string).unwrap();
         assert_eq!(targets.len(), 2);
-        assert_eq!(targets[0].name, "target1");
-        assert_eq!(targets[0].url, "https://example.com/target1");
-        assert_eq!(targets[1].name, "target2");
-        assert_eq!(targets[1].url, "https://example.com/target2");
+        assert_eq!(targets.get("target1").unwrap().url, "https://example.com/target1");
+        assert_eq!(targets.get("target2").unwrap().url, "https://example.com/target2");
     }
 
     #[test]
     fn test_parse_explicit_targets() {
         let doc_string = r#"
         target1_exp {
-            url "https://example.com/target1_exp"
+            target "https://example.com/target1_exp"
         }
         target2_exp {
-            url "https://example.com/target2_exp"
+            target "https://example.com/target2_exp"
         }
         "#;
-        let targets = test_helper_parse_doc(doc_string);
+        let targets = test_helper_parse_doc(doc_string).unwrap();
         assert_eq!(targets.len(), 2);
-        assert_eq!(targets[0].name, "target1_exp");
-        assert_eq!(targets[0].url, "https://example.com/target1_exp");
-        assert_eq!(targets[1].name, "target2_exp");
-        assert_eq!(targets[1].url, "https://example.com/target2_exp");
+        assert_eq!(targets.get("target1_exp").unwrap().url, "https://example.com/target1_exp");
+        assert_eq!(targets.get("target2_exp").unwrap().url, "https://example.com/target2_exp");
     }
+
+    #[test]
+        fn parse_fails_on_missing_target_url() {
+            let doc_string = r#"
+            target1_exp {
+            }
+            "#;
+            let result = test_helper_parse_doc(doc_string);
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn parse_handles_empty_document() {
+            let doc_string = r#""#;
+            let targets = test_helper_parse_doc(doc_string).unwrap();
+            assert!(targets.is_empty());
+        }
+
+        #[test]
+        fn parse_handles_duplicate_target_names() {
+            let doc_string = r#"
+            target1 "https://example.com/target1"
+            target1 "https://example.com/target1_duplicate"
+            "#;
+            let targets = test_helper_parse_doc(doc_string).unwrap();
+            assert_eq!(targets.len(), 1);
+            assert_eq!(targets.get("target1").unwrap().url, "https://example.com/target1_duplicate");
+        }
+
+        #[test]
+        fn parse_doesnt_destroy_html_chars() {
+            let doc_string = r#"
+            target1 "https://example.com/target1%20with%20space"
+            "#;
+            let targets = test_helper_parse_doc(doc_string).unwrap();
+            assert_eq!(targets.len(), 1);
+            assert_eq!(targets.get("target1").unwrap().url, "https://example.com/target1%20with%20space");
+        }
 }
