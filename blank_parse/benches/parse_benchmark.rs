@@ -5,7 +5,7 @@ fn create_test_doc_string(size: i32) -> String {
     let mut doc = String::new();
     for i in 0..size {
         if i % 2 == 0 {
-            doc.push_str(&format!("target{}_exp {{ name \"target{}_exp\" \n url \"https://example.com/target{}\"\n }}\n", i, i, i));
+            doc.push_str(&format!("target{}_exp {{ target \"https://example.com/target{}\"\n }}\n", i, i));
         } else {
             doc.push_str(&format!("target{}_name \"https://example.com/target{}\"\n", i, i));
         }

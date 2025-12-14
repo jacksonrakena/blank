@@ -42,6 +42,18 @@ pub struct InvalidTargetError {
 }
 
 #[derive(Error, Debug, Diagnostic)]
+#[error("expected one of Permanent, Temporary for redirect mode")]
+#[diagnostic(
+    code("invalid_redirect_mode_error"),
+)]
+pub struct InvalidRedirectModeError {
+    #[source_code]
+    pub src: NamedSource<String>,
+    #[label(primary, "invalid redirect mode defined here")]
+    pub reference: SourceSpan,
+}
+
+#[derive(Error, Debug, Diagnostic)]
 #[error("expected a string value here")]
 #[diagnostic(
     code("expected_str_error"),

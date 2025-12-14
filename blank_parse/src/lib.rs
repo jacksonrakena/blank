@@ -1,11 +1,11 @@
+use crate::errors::{ExpectedStringError, InvalidRedirectModeError};
+use crate::rules::{RedirectionMode, RuleOptions};
+use errors::{CannotReadTargetManifestError, InvalidTargetError, RuleMissingValidTargetError};
+use kdl::{KdlDocument, KdlNode, KdlValue, NodeKey};
+use miette::{IntoDiagnostic, NamedSource, SourceOffset};
+use rules::Rule;
 use std::collections::HashMap;
 use std::fs;
-use kdl::{KdlDocument, KdlEntry, KdlNode, KdlValue, NodeKey};
-use miette::{IntoDiagnostic, NamedSource, SourceOffset};
-use errors::{CannotReadTargetManifestError, InvalidTargetError, RuleMissingValidTargetError};
-use rules::Rule;
-use crate::errors::ExpectedStringError;
-use crate::rules::RuleOptions;
 
 pub mod rules;
 pub mod errors;
@@ -28,7 +28,7 @@ impl ParseContext {
     fn parse_string(&self, target: &KdlValue, parent: &KdlNode) -> miette::Result<String> {
         let str = target
             .as_string()
-            .ok_or(ExpectedStringError {
+            .ok_or_else(|| ExpectedStringError {
                 src: self.source.clone(),
                 reference: parent.span()
             })
@@ -41,6 +41,60 @@ impl ParseContext {
         })).into_diagnostic()
     }
 
+    fn try_parse_opts_nodes(&self, doc: &KdlDocument) -> miette::Result<RuleOptions> {
+        let mut opts = RuleOptions::default();
+
+        for node in doc.nodes() {
+            match node.name().value() {
+                "description" => {
+                    opts.description = Some(self.parse_string(
+                        node.entries().first().ok_or_else(
+                            || ExpectedStringError {
+                                src: self.source.clone(),
+                                reference: node.span()
+                            }
+                        )?.value(),
+                        &node
+                    )?);
+                },
+                "redirect" => {
+                    opts.redirect = match node.entries().first().ok_or_else(
+                        || ExpectedStringError {
+                            src: self.source.clone(),
+                            reference: node.span()
+                        }
+                    )?.value().as_string().ok_or_else(
+                        || ExpectedStringError {
+                            src: self.source.clone(),
+                            reference: node.span()
+                        }
+                    )? {
+                        "permanent" => RedirectionMode::Permanent,
+                        "temporary" => RedirectionMode::Temporary,
+                        _ => {
+                            return Err(InvalidRedirectModeError {
+                                src: self.source.clone(),
+                                reference: node.span(),
+                            })?
+                        }
+                    };
+                },
+                "tags" => {
+                    for entry in node.entries() {
+                        let tag_str = entry.value().as_string().ok_or_else(
+                            || ExpectedStringError {
+                                src: self.source.clone(),
+                                reference: node.span()
+                            }
+                        )?;
+                        opts.tags.push(tag_str.to_string());
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(opts)
+    }
     fn try_parse_opts(&self, node: &KdlNode) -> miette::Result<RuleOptions> {
         let mut opts = RuleOptions::default();
 
@@ -49,6 +103,25 @@ impl ParseContext {
         if let Some(desc) = entries.iter()
             .find(|e|e.name().is_some() && e.name().unwrap().to_string().eq("description")) {
             opts.description = Some(self.parse_string(desc.value(), node)?);
+        }
+
+        if let Some(redirect) = entries.iter()
+            .find(|e|e.name().is_some() && e.name().unwrap().to_string().eq("redirect")) {
+            opts.redirect = match redirect.value().as_string().ok_or_else(
+                || ExpectedStringError {
+                    src: self.source.clone(),
+                    reference: node.span()
+                }
+            )? {
+                "permanent" => RedirectionMode::Permanent,
+                "temporary" => RedirectionMode::Temporary,
+                _ => {
+                    return Err(InvalidRedirectModeError {
+                        src: self.source.clone(),
+                        reference: node.span(),
+                    })?
+                }
+            };
         }
 
         Ok(opts)
@@ -72,7 +145,7 @@ impl ParseContext {
                             position_to_insert_target: SourceOffset::from(target.span().offset()),
                         }
                     )?.value(), &node)?,
-                    opts: RuleOptions::default(),
+                    opts: self.try_parse_opts_nodes(children)?,
                 })
             },
             None => {
@@ -117,11 +190,10 @@ pub fn parse_doc(source: NamedSource<String>, doc: KdlDocument) -> miette::Resul
     ParseContext { source: source, document: doc }.try_parse()
 }
 
-// tests
 #[cfg(test)]
 mod tests {
-    use miette::Error;
     use super::*;
+    use miette::Error;
 
     fn test_helper_parse_doc(text: &str) -> Result<HashMap<String, Rule>, Error> {
         let src = NamedSource::new("test_doc".to_string(), text.to_string());

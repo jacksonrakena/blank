@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use axum::extract::Path;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Redirect};
@@ -12,13 +13,12 @@ use tower_http::trace::TraceLayer;
 
 pub async fn execute_rule(
     Path(rule): Path<String>,
-    Extension(targets): Extension<Arc<Vec<Rule>>>,
+    Extension(targets): Extension<Arc<HashMap<String,Rule>>>,
 ) -> impl IntoResponse {
-    for target in targets.iter() {
-        if target.name == rule {
-            println!("Executing rule '{}' with URL: {}", rule, target.url);
-            return Redirect::to(&target.url).into_response()
-        }
+
+    if let Some(rule) = targets.get(&rule) {
+        println!("Executing rule {:?}", rule);
+        return Redirect::to(&rule.url).into_response()
     }
 
     (StatusCode::NOT_FOUND, format!("no rule found for '{}'", rule)).into_response()
@@ -26,8 +26,8 @@ pub async fn execute_rule(
 #[tokio::main]
 async fn main() -> miette::Result<()> {
     let targets = blank_parse::parse_targets()?;
-    for (name, rule) in &targets {
-        println!("{:?}", rule);
+    for (_, rule) in &targets {
+        println!("Loaded {:?}", rule);
     }
 
     let app = Router::new()
