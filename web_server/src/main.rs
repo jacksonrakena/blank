@@ -10,6 +10,10 @@ use tokio::net::TcpListener;
 use tower_http::add_extension::AddExtensionLayer;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use log::info;
 
 pub async fn execute_rule(
     Path(rule): Path<String>,
@@ -17,7 +21,7 @@ pub async fn execute_rule(
 ) -> impl IntoResponse {
 
     if let Some(rule) = targets.get(&rule) {
-        println!("Executing rule {:?}", rule);
+        info!("executing {:?}", rule);
         return Redirect::to(&rule.url).into_response()
     }
 
@@ -25,9 +29,17 @@ pub async fn execute_rule(
 }
 #[tokio::main]
 async fn main() -> miette::Result<()> {
+    let filter = Targets::new()
+        .with_default(tracing_subscriber::filter::LevelFilter::INFO);
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(filter)
+        .init();
+
     let targets = blank_parse::parse_targets()?;
     for (_, rule) in &targets {
-        println!("Loaded {:?}", rule);
+        info!("Loaded {:?}", rule);
     }
 
     let app = Router::new()
